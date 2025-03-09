@@ -1,4 +1,4 @@
-export type QuestionType = 'text' | 'number' | 'select';
+export type QuestionType = "text" | "number" | "select" | "textarea";
 
 export interface SelectOption {
   label: string;
@@ -7,30 +7,40 @@ export interface SelectOption {
 
 export interface BaseQuestion {
   id?: string;
-  type: QuestionType;
   label: string;
+  type: "text" | "textarea" | "select" | "number";
   required?: boolean;
-  defaultValue?: string | number;
+  description?: string;
+  placeholder?: string;
 }
 
 export interface TextQuestion extends BaseQuestion {
-  type: 'text';
+  type: "text";
   minLength?: number;
   maxLength?: number;
 }
 
 export interface NumberQuestion extends BaseQuestion {
-  type: 'number';
+  type: "number";
   min?: number;
   max?: number;
 }
 
 export interface SelectQuestion extends BaseQuestion {
-  type: 'select';
+  type: "select";
   options: SelectOption[];
 }
 
-export type Question = TextQuestion | NumberQuestion | SelectQuestion;
+export interface TextareaQuestion extends BaseQuestion {
+  type: "textarea";
+  rows?: number;
+}
+
+export type Question =
+  | TextQuestion
+  | NumberQuestion
+  | SelectQuestion
+  | TextareaQuestion;
 
 export interface ApiResponse<T> {
   data: T;

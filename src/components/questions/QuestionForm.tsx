@@ -1,43 +1,59 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from "react";
 
-import { Question, QuestionType, SelectOption } from '../../api/types';
-import useDebounce from '../../hooks/useDebounce';
+import { Question, QuestionType, SelectOption } from "../../api/types";
+import useDebounce from "../../hooks/useDebounce";
+import Toast from "../common/Toast";
 
 interface QuestionFormProps {
   onSave: (question: Question) => Promise<void>;
   initialQuestion?: Question;
 }
 
-const QuestionForm: React.FC<QuestionFormProps> = ({ onSave, initialQuestion }) => {
+const QuestionForm: React.FC<QuestionFormProps> = ({
+  onSave,
+  initialQuestion,
+}) => {
   const [saving, setSaving] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState<"success" | "error">("success");
   const [questionData, setQuestionData] = useState({
-    label: '',
-    type: 'text' as QuestionType,
+    label: "",
+    type: "text" as QuestionType,
     required: false,
     hidden: false,
-    helperText: '',
+    helperText: "",
     // Number specific
-    min: '',
-    max: '',
+    min: "",
+    max: "",
     // Text specific
-    minLength: '',
-    maxLength: '',
+    minLength: "",
+    maxLength: "",
     // Select specific
     options: [] as SelectOption[],
   });
 
-  // Initialize form data only once when component mounts or initialQuestion changes
   useEffect(() => {
     if (initialQuestion) {
       setQuestionData((prev) => ({
         ...prev,
         ...initialQuestion,
-        min: initialQuestion.type === 'number' ? String(initialQuestion.min || '') : '',
-        max: initialQuestion.type === 'number' ? String(initialQuestion.max || '') : '',
+        min:
+          initialQuestion.type === "number"
+            ? String(initialQuestion.min || "")
+            : "",
+        max:
+          initialQuestion.type === "number"
+            ? String(initialQuestion.max || "")
+            : "",
         minLength:
-          initialQuestion.type === 'text' ? String(initialQuestion.minLength || '') : '',
+          initialQuestion.type === "text"
+            ? String(initialQuestion.minLength || "")
+            : "",
         maxLength:
-          initialQuestion.type === 'text' ? String(initialQuestion.maxLength || '') : '',
+          initialQuestion.type === "text"
+            ? String(initialQuestion.maxLength || "")
+            : "",
       }));
     }
   }, [initialQuestion]);
@@ -47,17 +63,27 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSave, initialQuestion }) 
       setSaving(true);
       try {
         await onSave(data);
+        setToastMessage("Question saved successfully!");
+        setToastType("success");
+        setShowToast(true);
+      } catch (error) {
+        console.error("Failed to save question:", error);
+        setToastMessage("Failed to save question.");
+        setToastType("error");
+        setShowToast(true);
       } finally {
         setSaving(false);
       }
     },
-    [onSave],
+    [onSave]
   );
 
   const debouncedSave = useDebounce(handleSave, 1000);
 
   const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >
   ) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
@@ -65,46 +91,63 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSave, initialQuestion }) 
     setQuestionData((prev) => {
       const updatedData = {
         ...prev,
-        [name]: type === 'checkbox' ? checked : value,
+        [name]: type === "checkbox" ? checked : value,
       };
 
-      // Auto-save when data changes
-      if (initialQuestion?.id && updatedData.label) {
-        // Only auto-save if editing and has label
+      if (name.startsWith("options[")) {
+        const index = parseInt(name.match(/\d+/)?.[0] || "0", 10);
+        const field = name.split(".")[1]; // Get 'label' or 'value'
+        const updatedOptions = [...prev.options];
+        updatedOptions[index] = {
+          ...updatedOptions[index],
+          [field]: value,
+        };
+        updatedData.options = updatedOptions;
+      }
+
+      const isValid =
+        updatedData.label &&
+        updatedData.type &&
+        (updatedData.type !== "select" || updatedData.options.length > 0);
+
+      if (isValid) {
         const questionPayload = {
           ...updatedData,
-          id: initialQuestion.id, // Preserve the ID
           type: updatedData.type,
-          ...(updatedData.type === 'number' && {
+          ...(updatedData.type === "number" && {
             min: updatedData.min ? Number(updatedData.min) : undefined,
             max: updatedData.max ? Number(updatedData.max) : undefined,
           }),
-          ...(updatedData.type === 'text' && {
-            minLength: updatedData.minLength ? Number(updatedData.minLength) : undefined,
-            maxLength: updatedData.maxLength ? Number(updatedData.maxLength) : undefined,
+          ...(updatedData.type === "text" && {
+            minLength: updatedData.minLength
+              ? Number(updatedData.minLength)
+              : undefined,
+            maxLength: updatedData.maxLength
+              ? Number(updatedData.maxLength)
+              : undefined,
+          }),
+          ...(updatedData.type === "select" && {
+            options: updatedData.options, // Ensure options are included
           }),
         } as Question;
 
         debouncedSave(questionPayload);
+      } else {
+        setToastMessage(
+          "Please fill in all required fields and ensure options are valid."
+        );
+        setToastType("error");
+        setShowToast(true);
       }
 
       return updatedData;
     });
   };
 
-  const handleOptionChange = (index: number, field: 'label' | 'value', value: string) => {
-    setQuestionData((prev) => ({
-      ...prev,
-      options: prev.options.map((opt, i) =>
-        i === index ? { ...opt, [field]: value } : opt,
-      ),
-    }));
-  };
-
   const addOption = () => {
     setQuestionData((prev) => ({
       ...prev,
-      options: [...prev.options, { label: '', value: '' }],
+      options: [...prev.options, { label: "", value: "" }],
     }));
   };
 
@@ -126,25 +169,39 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSave, initialQuestion }) 
         required: questionData.required,
         hidden: questionData.hidden,
         helperText: questionData.helperText || undefined,
-        ...(questionData.type === 'number' && {
+        ...(questionData.type === "number" && {
           min: questionData.min ? Number(questionData.min) : undefined,
           max: questionData.max ? Number(questionData.max) : undefined,
         }),
-        ...(questionData.type === 'text' && {
-          minLength: questionData.minLength ? Number(questionData.minLength) : undefined,
-          maxLength: questionData.maxLength ? Number(questionData.maxLength) : undefined,
+        ...(questionData.type === "text" && {
+          minLength: questionData.minLength
+            ? Number(questionData.minLength)
+            : undefined,
+          maxLength: questionData.maxLength
+            ? Number(questionData.maxLength)
+            : undefined,
         }),
-        ...(questionData.type === 'select' && {
+        ...(questionData.type === "select" && {
           options: questionData.options,
         }),
       } as Question;
 
       await onSave(questionPayload);
+      setToastMessage("Question saved successfully!");
+      setToastType("success");
+      setShowToast(true);
     } catch (error) {
-      console.error('Failed to save question:', error);
+      console.error("Failed to save question:", error);
+      setToastMessage("Failed to save question.");
+      setToastType("error");
+      setShowToast(true);
     } finally {
       setSaving(false);
     }
+  };
+
+  const closeToast = () => {
+    setShowToast(false);
   };
 
   return (
@@ -175,9 +232,8 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSave, initialQuestion }) 
         </div>
       )}
       <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border p-4">
-        {/* Basic Fields */}
         <div>
-          <label className="mb-2 block">
+          <label className="mb-2 block text-primary-dark">
             Question Title *
             <input
               type="text"
@@ -185,7 +241,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSave, initialQuestion }) 
               value={questionData.label}
               onChange={handleInputChange}
               required
-              className="w-full rounded border p-2"
+              className="w-full rounded border border-primary-teal p-2 focus:border-primary-blue focus:outline-none focus:ring-1 focus:ring-primary-blue"
               placeholder="Enter question title"
             />
           </label>
@@ -199,16 +255,16 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSave, initialQuestion }) 
               value={questionData.type}
               onChange={handleInputChange}
               required
-              className="w-full rounded border p-2"
+              className="w-full rounded border border-primary-teal p-2 focus:border-primary-blue focus:outline-none focus:ring-1 focus:ring-primary-blue"
             >
               <option value="text">Text</option>
+              <option value="textarea">Textarea</option>
               <option value="number">Number</option>
               <option value="select">Select</option>
             </select>
           </label>
         </div>
 
-        {/* Checkboxes */}
         <div className="flex space-x-4">
           <label className="flex items-center">
             <input
@@ -232,7 +288,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSave, initialQuestion }) 
           </label>
         </div>
 
-        {/* Helper Text */}
         <div>
           <label className="mb-2 block">
             Helper Text
@@ -246,8 +301,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSave, initialQuestion }) 
           </label>
         </div>
 
-        {/* Type-specific Fields */}
-        {questionData.type === 'number' && (
+        {questionData.type === "number" && (
           <div className="grid grid-cols-2 gap-4">
             <label className="block">
               Minimum Value
@@ -272,7 +326,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSave, initialQuestion }) 
           </div>
         )}
 
-        {questionData.type === 'text' && (
+        {questionData.type === "text" && (
           <div className="grid grid-cols-2 gap-4">
             <label className="block">
               Minimum Length
@@ -297,14 +351,14 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSave, initialQuestion }) 
           </div>
         )}
 
-        {questionData.type === 'select' && (
+        {questionData.type === "select" && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <h3>Options</h3>
+              <h3 className="text-primary-dark">Options</h3>
               <button
                 type="button"
                 onClick={addOption}
-                className="rounded bg-blue-500 px-3 py-1 text-white"
+                className="rounded bg-primary-purple px-3 py-1 text-white hover:bg-primary-blue"
               >
                 Add Option
               </button>
@@ -313,15 +367,17 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSave, initialQuestion }) 
               <div key={index} className="flex space-x-2">
                 <input
                   type="text"
+                  name={`options[${index}].label`}
                   value={option.label}
-                  onChange={(e) => handleOptionChange(index, 'label', e.target.value)}
+                  onChange={(e) => handleInputChange(e)}
                   placeholder="Option Label"
                   className="flex-1 rounded border p-2"
                 />
                 <input
                   type="text"
+                  name={`options[${index}].value`}
                   value={option.value}
-                  onChange={(e) => handleOptionChange(index, 'value', e.target.value)}
+                  onChange={(e) => handleInputChange(e)}
                   placeholder="Option Value"
                   className="flex-1 rounded border p-2"
                 />
@@ -336,18 +392,11 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSave, initialQuestion }) 
             ))}
           </div>
         )}
-
-        {/* Submit Button */}
-        <button
-          type="submit"
-          disabled={saving}
-          className={`w-full rounded p-2 text-white ${
-            saving ? 'bg-gray-400' : 'bg-blue-500 hover:bg-blue-600'
-          }`}
-        >
-          {saving ? 'Saving...' : 'Save Question'}
-        </button>
       </form>
+
+      {showToast && (
+        <Toast message={toastMessage} type={toastType} onClose={closeToast} />
+      )}
     </div>
   );
 };

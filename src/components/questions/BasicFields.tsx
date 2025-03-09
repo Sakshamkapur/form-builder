@@ -1,6 +1,6 @@
-import React from 'react';
+import React from "react";
 
-import { QuestionType } from '../../../api/types';
+import { QuestionType } from "../../api/types";
 
 interface BasicFieldsProps {
   label: string;
@@ -9,7 +9,9 @@ interface BasicFieldsProps {
   hidden: boolean;
   helperText: string;
   onChange: (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >
   ) => void;
 }
 
